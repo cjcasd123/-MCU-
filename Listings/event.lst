@@ -1,0 +1,78 @@
+C51 COMPILER V9.54   EVENT                                                                 09/26/2019 21:17:17 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE EVENT
+OBJECT MODULE PLACED IN .\Objects\event.obj
+COMPILER INVOKED BY: D:\keil5 mdk\C51\BIN\C51.EXE user\src\event.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\lib;.\user\inc) DEB
+                    -UG OBJECTEXTEND PRINT(.\Listings\event.lst) TABS(2) OBJECT(.\Objects\event.obj)
+
+line level    source
+
+   1          /**
+   2            *************************************************************************
+   3            * @file    event.c
+   4            * @author  monkey.Huaqian
+   5            * @version V1.0.0
+   6            * @date    2019/03/08 15:17:36
+   7            * @brief
+   8            *************************************************************************
+   9            * @attention
+  10            *
+  11            * <h2><center>&Copyright(c) 2014-2020 Xiamen HuaQian Studio</center></h2>
+  12            *
+  13            *************************************************************************
+  14            */
+  15          
+  16            /*************************     系统头文件包含     *************************/
+  17          
+  18          
+  19            /*************************     私有头文件包含     *************************/
+  20          #include "event.h"
+  21          
+  22          /*************************      导入命名空间      *************************/
+  23          
+  24          
+  25          /*************************      C++ 兼容定义      *************************/
+  26          #ifdef __cplusplus 
+              #if __cplusplus 
+              extern "C" {
+              #endif 
+              #endif
+  31          
+  32            /*************************        全局枚举        *************************/
+  33          
+  34            /*************************       全局宏定义       *************************/
+  35          
+  36            /*************************     全局结构体定义     *************************/
+  37          
+  38            /*************************      全局变量定义      *************************/
+  39            uint32_t  g_evnt_triggle_flg = 0; // 用来标志各个事件是否触发
+  40          
+  41            /*************************        函数声明        *************************/
+  42          
+  43            /*************************        函数实现        *************************/
+  44          
+  45            /*************************      C++ 兼容定义      *************************/
+  46          #ifdef __cplusplus 
+              #if __cplusplus 
+              }
+              #endif 
+              #endif
+  51          
+  52          
+
+
+C51 COMPILER V9.54   EVENT                                                                 09/26/2019 21:17:17 PAGE 2   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      4    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

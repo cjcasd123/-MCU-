@@ -1,0 +1,375 @@
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE UART
+OBJECT MODULE PLACED IN .\Objects\uart.obj
+COMPILER INVOKED BY: D:\keil5 mdk\C51\BIN\C51.EXE user\src\uart.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\lib;.\user\inc) DEBU
+                    -G OBJECTEXTEND PRINT(.\Listings\uart.lst) TABS(2) OBJECT(.\Objects\uart.obj)
+
+line level    source
+
+   1          #include "uart.h"
+   2          #include "stc8.h"
+   3          #include "intrins.h"
+   4          #include "config.h"
+   5          #include <string.h>
+   6          
+   7          /*
+   8               串口1 -- GSM   P36 P37
+   9             串口2 -- WIFI  P10 P11
+  10          */
+  11          
+  12          /* 判断是否是2的倍数 */
+  13          #define IsNotPowerOF2(x)      ((x)&(x-1))
+  14          //u8 usart1_date,usart2_date;
+  15          
+  16          // NB： Timer 1 -> 串口1     115200    GSM
+  17          void Uart1Isr() interrupt 4 using 1
+  18          {
+  19   1        if (TI)
+  20   1        {
+  21   2          TI = 0;
+  22   2      #if enableUart1SendInterrupt
+  23   2          if (COM1.B_TX_busy == TRUE && COM1.TX_read != COM1.TX_write)
+  24   2          {
+  25   3            SBUF = TX1_Buffer[COM1.TX_read];
+  26   3            ++COM1.TX_read;
+  27   3          }
+  28   2          else {
+  29   3            COM1.B_TX_busy = FALSE;
+  30   3          }
+  31   2      #else
+                  COM1.B_TX_busy = FALSE;
+              #endif 
+  34   2        }
+  35   1      
+  36   1        if (RI)
+  37   1        {
+  38   2          RI = 0;
+  39   2      
+  40   2          do {
+  41   3            /* 判断是否已经接受完毕 <==> lock */
+  42   3            if (COM1.RX_Cnt
+  43   3              && COM1.RX_TimeOut <= TimeOutSet2)
+  44   3            {
+  45   4              break;
+  46   4            }
+  47   3      
+  48   3            /* 正常接收 */
+  49   3            if (COM1.RX_Cnt < COM_RX1_Lenth - 1)
+  50   3            {
+  51   4              RX1_Buffer[COM1.RX_Cnt++] = SBUF;
+  52   4              //usart1_date = SBUF;
+  53   4            }
+  54   3            COM1.RX_TimeOut = TimeOutSet1;
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 2   
+
+  55   3          } while (0);
+  56   2        }
+  57   1      }
+  58          
+  59          void p_uart1_init(void)
+  60          {
+  61   1        AIR_TX = 1;
+  62   1        AIR_RX = 1;
+  63   1        PORT_MODE_SET(AIR_RX_G, AIR_RX_P, PORT_MODE_AD);
+  64   1      
+  65   1        /* 选择串口一的功能引脚为 RxD:P3.6  TxD:P3.7 */
+  66   1        //  P_SW1 = 0x40;
+  67   1        //disableUartInterrupts();
+  68   1        SCON = 0x50;                    // 8位数据，可变波特率
+  69   1        AUXR |= 0x40;                   // 定时器1时钟1为FOSC,即1T
+  70   1        AUXR &= 0xFE;                   // 串口1选择定时器1为波特率发生器
+  71   1        TMOD &= 0x0F;                   // 设定定时器1工作模式0 为16位自动重装方式
+  72   1        TL1 = (65536 - (FOSC / 4 / BAUD));     // 设置定时初值 这里设置12为晶振
+  73   1        TH1 = (65536 - (FOSC / 4 / BAUD)) >> 8;   // 设置定时初值
+  74   1        TR1 = 1;                        // 启动定时器1
+  75   1      
+  76   1        enableUartInterrupts();
+  77   1      }
+  78          
+  79          void p_uart1_send_byte(char dat)
+  80          {
+  81   1      #if enableUart1SendInterrupt
+  82   1        if (COM1.TX_read != COM1.TX_write + 1)
+  83   1        {
+  84   2          TX1_Buffer[COM1.TX_write] = dat;  //装发送缓冲
+  85   2          ++COM1.TX_write;
+  86   2        }
+  87   1      
+  88   1        if (COM1.B_TX_busy == FALSE)    //空闲
+  89   1        {
+  90   2          COM1.B_TX_busy = TRUE;        //标志忙
+  91   2          SBUF = dat;
+  92   2          ++COM1.TX_read;
+  93   2        }
+  94   1      #else
+                while (COM1.B_TX_busy);
+                COM1.B_TX_busy = TRUE;
+                SBUF = dat;
+              #endif
+  99   1      }
+ 100          
+ 101          /**
+ 102            * ***********************************************************************
+ 103            * @brief  通过串口1发送数据
+ 104            *
+ 105            * @param  p: 需要发送的数据
+ 106            * @param  length: 发送的数据长度
+ 107            *
+ 108            * @retval void:
+ 109            *
+ 110            * @attention  : none
+ 111            * ***********************************************************************
+ 112            */
+ 113          void p_uart1_send_data(char *p, uint16_t length)
+ 114          {
+ 115   1        uint8_t i = 0;
+ 116   1      
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 3   
+
+ 117   1        for (i = 0; i < length; i++)
+ 118   1        {
+ 119   2          p_uart1_send_byte(p[i]);
+ 120   2        }
+ 121   1      }
+ 122          
+ 123          void p_uart1_send_string(char *p)
+ 124          {
+ 125   1        while (*p)
+ 126   1        {
+ 127   2          p_uart1_send_byte(*p);
+ 128   2          ++p;
+ 129   2        }
+ 130   1      }
+ 131          
+ 132          //BLE：Timer 2 -> 串口2   115200    WIFI
+ 133          void Uart2Isr() interrupt 8 using 1
+ 134          {
+ 135   1        /* 接收 */
+ 136   1        if (S2CON & 0x01)
+ 137   1        {
+ 138   2          S2CON &= ~0x01;
+ 139   2      
+ 140   2          RX2_Buffer[COM2.RX_Cnt++] = S2BUF;
+ 141   2          //usart2_date = S2BUF;
+ 142   2          COM2.RX_TimeOut = TimeOutSet1;
+ 143   2        }
+ 144   1      
+ 145   1        /* 发送 */
+ 146   1        if (S2CON & 0x02)
+ 147   1        {
+ 148   2          S2CON &= ~0x02;
+ 149   2      #if enableUart2SendInterrupt
+                  if (COM2.B_TX_busy == TRUE && COM2.TX_read != COM2.TX_write)
+                  {
+                    S2BUF = TX2_Buffer[COM2.TX_read & 0x7F];
+                    ++COM2.TX_read;
+                  }
+                  else {
+                    COM2.B_TX_busy = FALSE;
+                  }
+              #else
+ 159   2          COM2.B_TX_busy = FALSE;
+ 160   2      #endif
+ 161   2        }
+ 162   1      }
+ 163          
+ 164          
+ 165          /**
+ 166            * ***********************************************************************
+ 167            * @brief  串口2初始化，115200
+ 168            *
+ 169            * @param  :
+ 170            *
+ 171            * @retval void:
+ 172            *
+ 173            * @confirm  :
+ 174            * @attention  : none
+ 175            * ***********************************************************************
+ 176            */
+ 177          
+ 178          void p_uart2_init(void)
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 4   
+
+ 179          {
+ 180   1        WIFI_RX = 1;
+ 181   1        WIFI_TX = 1;
+ 182   1        PORT_MODE_SET(WIFI_RX_G, WIFI_RX_P, PORT_MODE_AD);
+ 183   1      
+ 184   1        //disableUar2tInterrupts();
+ 185   1        S2CON = 0x50;                   // 8位数据，可变波特率
+ 186   1        AUXR |= 0x04;                   // 定时器2时钟1为FOSC,即1T 
+ 187   1        T2L = (65536 - (FOSC / 4 / BAUD));     // 设置定时初值 这里设置12为晶振
+ 188   1        T2H = (65536 - (FOSC / 4 / BAUD)) >> 8;   // 设置定时初值
+ 189   1        AUXR |= 0x10;                   // 启动定时器2    
+ 190   1      
+ 191   1        enableUart2Interrupts();
+ 192   1      }
+ 193          
+ 194          
+ 195          void p_uart2_send_byte(char dat)
+ 196          {
+ 197   1      #if enableUart2SendInterrupt
+                if (COM2.TX_read != COM2.TX_write + 1)
+                {
+                  TX2_Buffer[COM2.TX_write & 0x7F] = dat; //装发送缓冲
+                  ++COM2.TX_write;
+                }
+              
+                if (COM2.B_TX_busy == FALSE)    //空闲
+                {
+                  COM2.B_TX_busy = TRUE;        //标志忙
+                  S2BUF = dat;
+                  ++COM2.TX_read;
+                }
+              
+              #else
+ 212   1        while (COM2.B_TX_busy);
+ 213   1        COM2.B_TX_busy = 1;
+ 214   1        S2BUF = dat;
+ 215   1      #endif
+ 216   1      }
+ 217          
+ 218          static uint16_t uart2_send_idx = 0;
+ 219          static uint16_t uart1_send_idx = 0;
+ 220          void p_uart2_send_data(char *p, uint8_t length)
+ 221          {
+ 222   1        
+ 223   1        for (uart2_send_idx = 0; uart2_send_idx < length; uart2_send_idx++)
+ 224   1        {
+ 225   2          p_uart2_send_byte(p[uart2_send_idx]);
+ 226   2        }
+ 227   1      }
+ 228          
+ 229          /* 用于WIFI特殊数据格式发送到GSM中的 */
+ 230          void p_uart1_send_data_backslash(char* p, uint16_t length)
+ 231          {
+ 232   1        for (uart1_send_idx = 0; uart1_send_idx < length; ++uart1_send_idx)
+ 233   1        {
+ 234   2          /* 过滤\r\n */
+ 235   2          if ('\r' == p[uart1_send_idx]
+ 236   2            || '\n' == p[uart1_send_idx])
+ 237   2          {
+ 238   3            continue;
+ 239   3          }
+ 240   2      
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 5   
+
+ 241   2          if ('\"' == p[uart1_send_idx])
+ 242   2          {
+ 243   3            p_uart1_send_byte('\\');
+ 244   3          }
+ 245   2          p_uart1_send_byte(p[uart1_send_idx]);
+ 246   2        }
+ 247   1      }
+ 248          
+ 249          void p_uart2_send_string(char *p)
+ 250          {
+ 251   1        while (*p)
+ 252   1        {
+ 253   2          p_uart2_send_byte(*p);
+ 254   2          ++p;
+ 255   2        }
+ 256   1      }
+ 257          
+ 258          
+ 259          
+ 260          #if 0
+              void p_uart1_uninit(void)
+              {
+                /* 选择串口一的功能引脚为 RxD:P1.6  TxD:P1.7 */
+                // SCON = 0x00;
+                //TMOD = 0x00;    
+                //TL1 = 0x00;    
+                //TH1 = 0x00;    
+                // AUXR = 0x00;   
+                TF1 = 0;
+                TR1 = 0;
+              
+                /*PORT_MODE_SET(LR_TX_G, LR_TX_P, PORT_MODE_PP);
+                PORT_MODE_SET(LR_RX_G, LR_RX_P, PORT_MODE_PP);
+                LR_TX = 0;
+                LR_RX = 0;*/
+              
+                //disableUartInterrupts();
+              }
+              
+              
+              void p_uart2_uninit(void)
+              {
+                /*PORT_MODE_SET(AIR_TX_G, AIR_TX_P, PORT_MODE_PP);
+                PORT_MODE_SET(AIR_RX_G, AIR_RX_P, PORT_MODE_PP);
+                AIR_TX = 0;
+                AIR_RX = 0;*/
+              }
+              
+              
+              
+              void p_uart1_init(void)
+              {
+                LR_TX = 1;
+                LR_RX = 1;
+                PORT_MODE_SET(LR_RX_G, LR_RX_P, PORT_MODE_AD);
+              
+                /* 选择串口一的功能引脚为 RxD:P3.6  TxD:P3.7 */
+                // P_SW1 = 0x40;
+                disableUartInterrupts();
+                /* 9600 */
+                //SCON = 0x50;    // 8位数据,可变波特率
+                //AUXR |= 0x40;   // 定时器1时钟为Fosc,即1T
+C51 COMPILER V9.54   UART                                                                  09/26/2019 21:32:20 PAGE 6   
+
+                //AUXR &= 0xFE;   // 串口1选择定时器1为波特率发生器
+                //TMOD &= 0x0F;   // 设定定时器1为16位自动重装方式
+                //TL1 = 0xC7;     // 设定定时初值
+                //TH1 = 0xFE;     // 设定定时初值
+                //ET1 = 0;      // 禁止定时器1中断
+                //TR1 = 1;      // 启动定时器1
+                /* 115200 */
+                SCON = 0x50;    //8位数据,可变波特率
+                AUXR |= 0x40;   //定时器1时钟为Fosc,即1T
+                AUXR &= 0xFE;   //串口1选择定时器1为波特率发生器
+                TMOD &= 0x0F;   //设定定时器1为16位自动重装方式
+                TL1 = 0xC7;     // 设定定时初值
+                TH1 = 0xFE;     // 设定定时初值
+                ET1 = 0;    //禁止定时器1中断
+                TR1 = 1;    //启动定时器1
+              
+                enableUartInterrupts();
+              }
+              
+              void p_uart2_init(void)
+              {
+                AIR_RX = 1;
+                AIR_TX = 1;
+                PORT_MODE_SET(AIR_RX_G, AIR_RX_P, PORT_MODE_AD);
+              
+                disableUartInterrupts();
+              
+                S2CON = 0x50;   // 8位数据,可变波特率
+                AUXR |= 0x04;   // 定时器2时钟为Fosc,即1T
+                T2L = 0xE6;       // 设定定时初值
+                T2H = 0xFF;       // 设定定时初值
+                AUXR |= 0x10;   // 启动定时器2
+              
+                IE2 |= 0x01;
+                enableUartInterrupts();
+              }
+              
+              
+              #endif
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    537    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      4      14
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

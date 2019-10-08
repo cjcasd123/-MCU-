@@ -1,0 +1,535 @@
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAINPROC
+OBJECT MODULE PLACED IN .\Objects\mainproc.obj
+COMPILER INVOKED BY: D:\keil5 mdk\C51\BIN\C51.EXE user\src\mainproc.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\lib;.\user\inc) 
+                    -DEBUG OBJECTEXTEND PRINT(.\Listings\mainproc.lst) TABS(2) OBJECT(.\Objects\mainproc.obj)
+
+line level    source
+
+   1          #include "config.h"
+   2          #include "string.h"
+   3          #include "stdlib.h"
+   4          #include "stdio.h"
+   5          #include "intrins.h"
+   6          #include "mainproc.h"
+   7          
+   8          
+   9          
+  10          u8 g_sy_shark_sign;
+  11          
+  12          idata COMx_Define                 COM1 = { 0x00 };
+  13          idata COMx_Define                 COM2 = { 0x00 };
+  14          
+  15          xdata u8          TX1_Buffer[COM_TX1_Lenth] = { 0x00 }; //发送缓冲
+  16          xdata u8                  RX1_Buffer[COM_RX1_Lenth] = { 0x00 }; //接收缓冲
+  17          
+  18          xdata u8          TX2_Buffer[COM_TX2_Lenth] = { 0x00 }; //发送缓冲
+  19          xdata u8                  RX2_Buffer[COM_RX2_Lenth] = { 0x00 }; //接收缓冲
+  20          
+  21          xdata u8          g_pre_recv_pkg[COM_RX2_Lenth] = { 0 };  // 上一次接收的数据包
+  22          
+  23          st_now_config               g_config = { 0x00 };
+  24          //idata char*         g_p_boot_reason = NULL;
+  25          
+  26          xdata st_pkg_to_luat    g_pkg_to_luat = { 0 };
+  27          idata st_item_from_luat*  g_p_item_from_luat = NULL;
+  28          
+  29          u8                      g_sy1_shark_cnt = 0x00;
+  30          u8                      g_sy2_shark_cnt = 0x00;
+  31          
+  32          /*************************        函数声明        *************************/
+  33          
+  34          /* 正初始化 */
+  35          void p_appc_all_init(void)
+  36          {
+  37   1        /* 12MHz */
+  38   1        p_sysclk_init();
+  39   1      
+  40   1        /* 管脚初始化(外部中断IO口) */
+  41   1        PORT_MODE_SET(SY1_G, SY1_P, PORT_MODE_HZ);
+  42   1        PORT_MODE_SET(SY2_G, SY2_P, PORT_MODE_HZ);
+  43   1      
+  44   1        /* GSM的电源IO口 */
+  45   1        PORT_MODE_SET(AIR_POWER_CTRL_G, AIR_POWER_CTRL_P, PORT_MODE_PP);
+  46   1        PORT_MODE_SET(AIR_POWERKEY_G, AIR_POWERKEY_P, PORT_MODE_PP);
+  47   1      
+  48   1        /*  WIFI的电源IO口 */
+  49   1        PORT_MODE_SET(WIFI_EN_G, WIFI_EN_P, PORT_MODE_PP);
+  50   1        PORT_MODE_SET(WIFI_RST_G, WIFI_RST_P, PORT_MODE_PP);
+  51   1        PORT_MODE_SET(WIFI_UPDATE_G, WIFI_UPDATE_P, PORT_MODE_PP);
+  52   1      
+  53   1        /* 串口初始化 */
+  54   1        p_uart1_init();
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 2   
+
+  55   1        p_uart2_init(); 
+  56   1      
+  57   1        /* 定时器初始化 */
+  58   1        p_timer_init();
+  59   1        g_time_ms = 0;
+  60   1      
+  61   1        /* 外部中断配置 */
+  62   1        p_watermark_init();
+  63   1      
+  64   1        /* 初始化看门狗 */
+  65   1        //WDG_RELOAD();
+  66   1        //p_watchdog_init();
+  67   1      
+  68   1        /* 开启所有中断和外部中断 */
+  69   1        enableInterrupts();
+  70   1        
+  71   1        /* 打包固定的格式 */
+  72   1        p_pkg_data_init();
+  73   1      
+  74   1        /* GSM电源引脚 */
+  75   1        AIR_POWER_CTRL = 0;
+  76   1        AIR_POWERKEY = 0;   // 做一个引脚的释放
+  77   1        //p_delay_10ms(120);
+  78   1        //AIR_POWERKEY = 1;
+  79   1      
+  80   1        /* WIFI电源引脚 */
+  81   1        WIFI_EN = 1;
+  82   1        WIFI_RST = 1;
+  83   1        WIFI_UPDATE = 1;
+  84   1      
+  85   1      }
+  86          
+  87          
+  88          /* 反初始化 */
+  89          void p_appc_all_deinit()
+  90          {
+  91   1        
+  92   1        /* 各种中断的关闭 */
+  93   1        disableUartInterrupts();
+  94   1        disableInterrupts();
+  95   1        disableExtiInterrupt();
+  96   1        disableUar2tInterrupts();
+  97   1        
+  98   1      
+  99   1        /* 管脚初始化 */
+ 100   1        PORT_MODE_SET(0, 0, PORT_MODE_PP); P00 = 0;
+ 101   1        PORT_MODE_SET(0, 1, PORT_MODE_PP); P01 = 0;
+ 102   1        PORT_MODE_SET(0, 2, PORT_MODE_PP); P02 = 0;
+ 103   1        PORT_MODE_SET(0, 3, PORT_MODE_PP); P03 = 0;
+ 104   1        PORT_MODE_SET(1, 0, PORT_MODE_PP); P10 = 0; // 串口2
+ 105   1        PORT_MODE_SET(1, 1, PORT_MODE_PP); P11 = 0; // 串口2
+ 106   1        PORT_MODE_SET(1, 2, PORT_MODE_PP); P12 = 1; // WIFI_RST
+ 107   1        PORT_MODE_SET(1, 3, PORT_MODE_PP); P13 = 0; // WIFI_UDDATE
+ 108   1        PORT_MODE_SET(1, 4, PORT_MODE_PP); P14 = 0; // WIFI_EN
+ 109   1        PORT_MODE_SET(1, 5, PORT_MODE_PP); P15 = 0;
+ 110   1        PORT_MODE_SET(1, 6, PORT_MODE_PP); P16 = 0; 
+ 111   1        PORT_MODE_SET(1, 7, PORT_MODE_PP); P17 = 0;
+ 112   1        PORT_MODE_SET(2, 0, PORT_MODE_PP); P20 = 0;  // AIR_POWERKEY（拉低1.5S以上）
+ 113   1        PORT_MODE_SET(2, 1, PORT_MODE_PP); P21 = 1;  // AIR_C
+ 114   1        PORT_MODE_SET(2, 2, PORT_MODE_PP); P22 = 0;
+ 115   1        PORT_MODE_SET(2, 3, PORT_MODE_PP); P23 = 0;
+ 116   1        PORT_MODE_SET(2, 4, PORT_MODE_PP); P24 = 0;
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 3   
+
+ 117   1        PORT_MODE_SET(2, 5, PORT_MODE_PP); P25 = 0;
+ 118   1        PORT_MODE_SET(2, 6, PORT_MODE_PP); P26 = 0;
+ 119   1        PORT_MODE_SET(2, 7, PORT_MODE_PP); P27 = 0;
+ 120   1        PORT_MODE_SET(3, 0, PORT_MODE_PP); P30 = 0; // 串口1
+ 121   1        PORT_MODE_SET(3, 1, PORT_MODE_PP); P31 = 0; // 串口1
+ 122   1        PORT_MODE_SET(3, 2, PORT_MODE_PP); P32 = 0; // 水银1
+ 123   1        PORT_MODE_SET(3, 3, PORT_MODE_PP); P33 = 0; // 水银2
+ 124   1        PORT_MODE_SET(3, 4, PORT_MODE_PP); P34 = 0;
+ 125   1        PORT_MODE_SET(3, 5, PORT_MODE_PP); P35 = 0;
+ 126   1        PORT_MODE_SET(3, 6, PORT_MODE_PP); P36 = 0; // 映射串口1
+ 127   1        PORT_MODE_SET(3, 7, PORT_MODE_PP); P37 = 0; // 映射串口1
+ 128   1        PORT_MODE_SET(5, 4, PORT_MODE_PP); P54 = 0;
+ 129   1        PORT_MODE_SET(5, 5, PORT_MODE_PP); P55 = 0; 
+ 130   1      }
+ 131          
+ 132          /* 空调GPS滤波窗口值, 不可超过6 */
+ 133          #define AIR_WIN_CNT   3
+ 134          
+ 135          
+ 136          /**
+ 137            * ***********************************************************************
+ 138            * @brief  休眠任务
+ 139            *
+ 140            * @param  :
+ 141            *
+ 142            * @retval void:
+ 143            *
+ 144            * @confirm  :
+ 145            * @attention  : none
+ 146            * ***********************************************************************
+ 147            */
+ 148          
+ 149          /* 单片机的睡眠  这是手动设置睡眠时间（掉电定时器一起配套）只有一种情况�
+             -�定时间睡眠 */
+ 150          void p_appc_task_sleep_proc()
+ 151          {
+ 152   1        static int32_t wake_up_remain_time = 0;
+ 153   1      
+ 154   1        wake_up_remain_time = 0;
+ 155   1      
+ 156   1        if (g_config.m_fast_sleep == TRUE)
+ 157   1        {
+ 158   2          p_appc_all_deinit();   // 返初始化
+ 159   2      
+ 160   2          /* 掉电模式时使用内部SCC */
+ 161   2          VOCTRL = 0x00;
+ 162   2      
+ 163   2          /* 使能掉电定时器 */
+ 164   2          // 1024 0x752f 15s
+ 165   2          WKTCL = 0x2f;
+ 166   2          WKTCH = 0xf5;
+ 167   2      
+ 168   2          
+ 169   2          /* 设定自己需要醒来的时间（设置定时器的话  就将外部关闭  否则就是设置为�
+             -��部唤醒）*/
+ 170   2          if (g_config.m_bypass_hour)
+ 171   2          {
+ 172   3            /*
+ 173   3              剩下的睡眠时间(每次15s) = 小时(x)*分钟(60)*秒(60)/周期(15s);
+ 174   3            */
+ 175   3            //wake_up_remain_time = g_config.m_bypass_hour * 60 * 60 / 15;
+ 176   3            wake_up_remain_time = g_config.m_bypass_hour * 1 * 60 / 15;
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 4   
+
+ 177   3            
+ 178   3          }
+ 179   2          /*  上面的寄存器的配置固定的   至于时间的设定看情况 */
+ 180   2          do
+ 181   2          {
+ 182   3      
+ 183   3            /* 睡觉 每次15秒 进行睡眠的使能(开始循环睡眠)  */
+ 184   3            MCU_SLEEP();
+ 185   3      
+ 186   3            /* 获取当前醒过来毫秒数（这是前面设定的测试这次睡眠的总时长） */
+ 187   3            --wake_up_remain_time;
+ 188   3      
+ 189   3            if (wake_up_remain_time <= 0)
+ 190   3            {
+ 191   4              /* 判断是否是旁路唤醒 */
+ 192   4              if (g_config.m_bypass_hour)
+ 193   4              {
+ 194   5                g_config.m_bypass_hour = 0;
+ 195   5                break;
+ 196   5              }
+ 197   4            }
+ 198   3      
+ 199   3          } while (1);
+ 200   2          p_appc_all_init();     // 正初始化
+ 201   2          //P55 = 1;
+ 202   2        }
+ 203   1        g_config.m_fast_sleep = FALSE;
+ 204   1      }
+ 205          
+ 206          /**
+ 207            * ***********************************************************************
+ 208            * @brief  向Luat发送设备状态
+ 209            *
+ 210            * @param  :
+ 211            *
+ 212            * @retval void:
+ 213            *
+ 214            * @confirm  :
+ 215            * @attention  : none
+ 216            * ***********************************************************************
+ 217            */
+ 218          void p_proc_report_luat(void)
+ 219          {
+ 220   1        uint8_t i = 0;
+ 221   1      
+ 222   1        /* 震动次数 */
+ 223   1        CUSTOM_ITOA_3(g_sy1_shark_cnt, g_pkg_to_luat.S1_Data); // 转化为字符存入数组
+ 224   1        CUSTOM_ITOA_3(g_sy2_shark_cnt, g_pkg_to_luat.S2_Data);
+ 225   1        g_sy1_shark_cnt = 0;
+ 226   1        g_sy2_shark_cnt = 0;
+ 227   1        p_uart1_send_data((char*)&g_pkg_to_luat, sizeof(g_pkg_to_luat));
+ 228   1        /* WIFI返回的数据作为另一次发送 */
+ 229   1        if (COM2.RX_Cnt)
+ 230   1        {
+ 231   2          /* 通过如果遇到双引号则在前面多发送过一次反斜杠 */
+ 232   2          p_uart1_send_data_backslash((char*)RX2_Buffer, COM2.RX_Cnt); //发送URST1接收缓冲区
+ 233   2        }
+ 234   1        p_uart1_send_string("\"}");
+ 235   1      }
+ 236          
+ 237          
+ 238          /* 打包的固定格式（发送给LUAT） */
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 5   
+
+ 239          void p_pkg_data_init(void)
+ 240          {
+ 241   1        g_pkg_to_luat.start = '{';
+ 242   1        strcpy(g_pkg_to_luat.S1, "\"S1\":\"");
+ 243   1        strcpy(g_pkg_to_luat.S2, "\",\"S2\":\"");
+ 244   1        strcpy(g_pkg_to_luat.AT, "\",\"AT\":\"");
+ 245   1      
+ 246   1      }
+ 247          
+ 248          /**
+ 249            * ***********************************************************************
+ 250            * @brief  重启Air模块    重启WIFI模块
+ 251            *
+ 252            * @param  :
+ 253            *
+ 254            * @retval void:
+ 255            *
+ 256            * @confirm  :
+ 257            * @attention  : none
+ 258            * ***********************************************************************
+ 259            */
+ 260          #if 0
+              /* 重新启动GSM */
+              void p_proc_reboot_air(void)
+              {
+                AIR_POWERKEY = 1;
+                AIR_POWER_CTRL = 0;
+                p_delay_10ms(400);
+                AIR_POWERKEY = 0;
+                AIR_POWER_CTRL = 1;
+              }
+              
+              /* 重新启动WIFI */
+              void p_proc_rebort_wifi(void)
+              {
+                WIFI_RST = 0;   // 对应的WIFIi的IO口
+                WIFI_PU = 0;
+                p_delay_10ms(200);
+                WIFI_RST = 1;
+                WIFI_PU = 1;
+              }
+              /* 关闭WIFI和GSM  */
+              /*  正常的打开GSM和WIFI（放在正初始化函数）有几个问题 */
+              WIFI_RST = 0;  // 具体对应WIFI哪几个口
+              WIFI_SET = 1;
+              WIFI_PU = 0;
+              
+              AIR_POWERKEY = 0;
+              AIR_POWER_CTRL = 1;
+              //GPIO_C_SPI = 1; // ？？？
+              #endif
+ 290          
+ 291          /* 执行特殊数据解析和打包的函数  */
+ 292          uint8_t p_proc_get_lora_data_lengh(uint8_t* p_to_lora_data)
+ 293          {
+ 294   1        static idata uint8_t cnt = 0;
+ 295   1        cnt = 0;
+ 296   1      
+ 297   1        while (*p_to_lora_data != '\"')
+ 298   1        {
+ 299   2          ++p_to_lora_data;
+ 300   2          ++cnt;
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 6   
+
+ 301   2        }
+ 302   1      
+ 303   1        return cnt;
+ 304   1      }
+ 305          
+ 306          uint8_t p_proc_get_lora_data_lengh_skip_space(uint8_t* p_to_lora_data)
+ 307          {
+ 308   1        static idata uint8_t cnt = 0;
+ 309   1        cnt = 0;
+ 310   1      
+ 311   1        while (*p_to_lora_data != '\"'
+ 312   1          && *p_to_lora_data != ' ')
+ 313   1        {
+ 314   2          ++p_to_lora_data;
+ 315   2          ++cnt;
+ 316   2        }
+ 317   1      
+ 318   1        return cnt;
+ 319   1      }
+ 320          /***************************************************************************************/
+ 321          /**
+ 322            * ***********************************************************************
+ 323            * @brief  解析来自Air的json数据
+ 324            *
+ 325            * @param  :
+ 326            *
+ 327            * @retval void:
+ 328            *
+ 329            * @confirm  :
+ 330            * @attention  : none
+ 331            * ***********************************************************************
+ 332            */
+ 333          
+ 334          void p_proc_data_parser_from_air(void)
+ 335          {
+ 336   1        idata uint8_t to_lora_data_length = 0;
+ 337   1        idata uint8_t index = 0;
+ 338   1      
+ 339   1        /* 查找包头 */
+ 340   1        while (RX1_Buffer[index] && index < COM1.RX_Cnt)
+ 341   1        {
+ 342   2          if (RX1_Buffer[index++] == '{')
+ 343   2          {
+ 344   3      
+ 345   3            break;
+ 346   3          }
+ 347   2        }
+ 348   1      
+ 349   1        /* 判断长度 */
+ 350   1        for (; COM1.RX_Cnt - index >= sizeof(st_item_from_luat); )
+ 351   1        {
+ 352   2          g_p_item_from_luat = (st_item_from_luat*)(RX1_Buffer + index);
+ 353   2      
+ 354   2          /* 合法性检查 */
+ 355   2          if ('\"' == g_p_item_from_luat->key_name[0]
+ 356   2            && '\"' == g_p_item_from_luat->key_name[3]
+ 357   2            && ':' == g_p_item_from_luat->key_name[4])
+ 358   2          {
+ 359   3            /* 数据合法，解析 */
+ 360   3            if (COMPARE_KEY(g_p_item_from_luat->key_name + 1, "ST")
+ 361   3              && CHECK_VALUE(g_p_item_from_luat->val))
+ 362   3            {
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 7   
+
+ 363   4              /* 睡眠时间 */
+ 364   4              g_config.m_bypass_hour = CUSTOM_ATOI_3(g_p_item_from_luat->val);
+ 365   4              index += sizeof(st_item_from_luat);
+ 366   4      
+ 367   4            }
+ 368   3            else if (COMPARE_KEY(g_p_item_from_luat->key_name + 1, "SD")
+ 369   3              && CHECK_BOOL(g_p_item_from_luat->val))
+ 370   3            {
+ 371   4              /* 关机使能 */
+ 372   4              g_config.m_fast_sleep = CUSTOM_ATOI_3(g_p_item_from_luat->val);
+ 373   4              if (g_config.m_fast_sleep)
+ 374   4              {
+ 375   5                p_envt_set_event(EVNT_SLEEP);
+ 376   5              }
+ 377   4              index += sizeof(st_item_from_luat);
+ 378   4      
+ 379   4            }
+ 380   3            else if (COMPARE_KEY(g_p_item_from_luat->key_name + 1, "W1")
+ 381   3              && CHECK_BOOL(g_p_item_from_luat->val))
+ 382   3            {
+ 383   4              /* 水印开关一 使能 */
+ 384   4              p_envt_set_event(EVNT_WATERMARK);
+ 385   4              g_config.m_enbale_sy1 = CUSTOM_ATOI_3(g_p_item_from_luat->val);
+ 386   4              index += sizeof(st_item_from_luat);
+ 387   4      
+ 388   4            }
+ 389   3            else if (COMPARE_KEY(g_p_item_from_luat->key_name + 1, "W2")
+ 390   3              && CHECK_BOOL(g_p_item_from_luat->val))
+ 391   3            {
+ 392   4              /* 水印开关二 使能 */
+ 393   4              p_envt_set_event(EVNT_WATERMARK);
+ 394   4              g_config.m_enbale_sy2 = CUSTOM_ATOI_3(g_p_item_from_luat->val);
+ 395   4              index += sizeof(st_item_from_luat);
+ 396   4      
+ 397   4            }
+ 398   3            else if (COMPARE_KEY(g_p_item_from_luat->key_name + 1, "AT"))
+ 399   3            {
+ 400   4              to_lora_data_length = p_proc_get_lora_data_lengh_skip_space(g_p_item_from_luat->val);
+ 401   4      
+ 402   4              if (to_lora_data_length > 0)
+ 403   4              {
+ 404   5                p_uart2_send_data(g_p_item_from_luat->val, to_lora_data_length);
+ 405   5                p_uart2_send_string("\r\n");
+ 406   5                index += p_proc_get_lora_data_lengh(g_p_item_from_luat->val);
+ 407   5                index += 8; // 跳过   ",
+ 408   5      
+ 409   5              }
+ 410   4              else
+ 411   4              {
+ 412   5                ++index;
+ 413   5              }
+ 414   4      
+ 415   4            }
+ 416   3      
+ 417   3            else {
+ 418   4              /* 跳过 已经成功判断的 "XX": 共5个字节*/
+ 419   4              index += 5;
+ 420   4            }
+ 421   3          }
+ 422   2          else {
+ 423   3            ++index;
+ 424   3          }
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 8   
+
+ 425   2        }
+ 426   1      
+ 427   1      }
+ 428          /**
+ 429            * ***********************************************************************
+ 430            * @brief  发送数据给AIR （包括WIFI和MCU）
+ 431            *
+ 432            * @param  :
+ 433            *
+ 434            * @retval void:
+ 435            *
+ 436            * @confirm  :
+ 437            * @attention  : none
+ 438            * ***********************************************************************
+ 439            */
+ 440            //void p_proc_data_parser_from_MCU(void)
+ 441          void p_proc_data_parser_from_loRa(void)
+ 442          {
+ 443   1        // TODO: WiFi返回数据，转发
+ 444   1      
+ 445   1        /* 阻塞方式(不用串口中断发送)，发送数据给Air800E */
+ 446   1        /* 构建数据包，再发送 */
+ 447   1        /* 清空，开锁 */
+ 448   1        p_proc_report_luat();
+ 449   1      
+ 450   1      }
+ 451          
+ 452          #if 0
+              /* 用于解析和打包的数据类型（仅作参考）  */
+              /* pkg from luat */
+              
+              {
+                "ST":"002",       // sleep time 睡眠时间（单位 小时）
+                  "SD" : "001",       // shutdown 关机使能
+                  "W1" : "001",       // watermark 水印开关1使能
+                  "W2" : "001",       // watermark 水印开关2使能
+                  "SH" : "004",       // shake threshod 振动次数报警阈值
+                  "BT" : "005",       // bypass time 旁路时间（单位 小时）
+                  "RB" : "000",       // reboot 是否需要重启模块
+                  "LR" : "xxxxxx"     // LoRa 需要LoRa转发的数据
+              }
+              
+              
+              /* 协议格式：*/
+              {
+                "WS":"nor",       // wake source 唤醒源
+                  "S1" : "004",             // 水印开关2 振动次数
+                  "AT" : "xxxxxx"           // AT指令返回数据   （WiFi版本才有）
+              }
+              
+              /* 唤醒源（设置唤醒数据）是否需要待定 */
+                /*
+                if (NULL == g_p_boot_reason)
+                {
+              
+                  g_pkg_to_luat.WS_Data[0] = 't';
+                  g_pkg_to_luat.WS_Data[1] = 'i';
+                  g_pkg_to_luat.WS_Data[2] = 'm';
+                }
+                else {
+                  g_pkg_to_luat.WS_Data[0] = g_p_boot_reason[0];
+                  g_pkg_to_luat.WS_Data[1] = g_p_boot_reason[1];
+C51 COMPILER V9.54   MAINPROC                                                              09/26/2019 21:32:19 PAGE 9   
+
+                  g_pkg_to_luat.WS_Data[2] = g_p_boot_reason[2];
+                }
+                */
+              
+              
+              #endif
+ 493          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1747    ----
+   CONSTANT SIZE    =     46    ----
+   XDATA SIZE       =   1437    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     12       1
+   IDATA SIZE       =     17       2
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,74 @@
+C51 COMPILER V9.54   WATERMARK                                                             09/26/2019 21:32:20 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE WATERMARK
+OBJECT MODULE PLACED IN .\Objects\watermark.obj
+COMPILER INVOKED BY: D:\keil5 mdk\C51\BIN\C51.EXE user\src\watermark.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\lib;.\user\inc)
+                    - DEBUG OBJECTEXTEND PRINT(.\Listings\watermark.lst) TABS(2) OBJECT(.\Objects\watermark.obj)
+
+line level    source
+
+   1          #include "intrins.h"
+   2          #include "config.h"
+   3          #include "uart.h"
+   4          #include "watermark.h"
+   5          
+   6          
+   7          
+   8          // S1(P3.2): INT0 下降沿触发
+   9          void INT0_Isr() interrupt 0 using 1
+  10          {
+  11   1        if (g_config.m_enbale_sy1 == TRUE)
+  12   1        {
+  13   2          g_sy1_shark_cnt++;
+  14   2        }
+  15   1      }
+  16          
+  17          // S2(P3.3): INT1 下降沿触发
+  18          void INT1_Isr() interrupt 2 using 1
+  19          {
+  20   1        if (g_config.m_enbale_sy2 == TRUE)
+  21   1        {
+  22   2          g_sy2_shark_cnt++;
+  23   2        }
+  24   1      }
+  25          
+  26          void p_watermark_init(void)
+  27          {
+  28   1        disableInterrupts();
+  29   1        /* INT0 */
+  30   1        IT0 = 1;            // 使能INT0下降沿中断
+  31   1        EX0 = 1;            // 使能INT0中断
+  32   1      
+  33   1        /* INT1 */
+  34   1        IT1 = 1;
+  35   1        EX1 = 1;
+  36   1      
+  37   1        enableInterrupts();
+  38   1      }
+  39          
+  40          
+  41          void p_watermark_ctrl(uint8_t sy1, uint8_t sy2)
+  42          {
+  43   1        1 == sy1 ? (EX0 = 1) : (EX0 = 0);
+  44   1        1 == sy2 ? (EX1 = 1) : (EX1 = 0);
+  45   1      }
+  46          
+  47          
+  48          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     63    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+C51 COMPILER V9.54   WATERMARK                                                             09/26/2019 21:32:20 PAGE 2   
+
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

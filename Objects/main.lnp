@@ -1,0 +1,9 @@
+".\Objects\main.obj",
+".\Objects\mainproc.obj",
+".\Objects\timer.obj",
+".\Objects\uart.obj",
+".\Objects\watermark.obj",
+".\Objects\wdg.obj",
+".\Objects\event.obj" 
+TO ".\Objects\main" 
+PRINT(".\Listings\main.m51") RAMSIZE(256) 

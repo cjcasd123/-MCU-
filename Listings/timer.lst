@@ -1,0 +1,136 @@
+C51 COMPILER V9.54   TIMER                                                                 09/26/2019 21:32:20 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE TIMER
+OBJECT MODULE PLACED IN .\Objects\timer.obj
+COMPILER INVOKED BY: D:\keil5 mdk\C51\BIN\C51.EXE user\src\timer.c OPTIMIZE(8,SPEED) BROWSE INCDIR(.\lib;.\user\inc) DEB
+                    -UG OBJECTEXTEND PRINT(.\Listings\timer.lst) TABS(2) OBJECT(.\Objects\timer.obj)
+
+line level    source
+
+   1          #include "stc8.h"
+   2          #include "intrins.h"
+   3          #include "config.h"
+   4          #include "event.h"
+   5          #include "wdg.h"
+   6          
+   7          u32   g_time_ms = 0x00;
+   8          u8 g_heart_beat, g_heart_sign;
+   9          
+  10          static uint8_t s_evnt_cnt = 0;
+  11          
+  12          
+  13          
+  14          void p_delay_10ms(uint32_t ms)
+  15          {
+  16   1        ms += my_time();
+  17   1        while (ms > my_time())
+  18   1        {
+  19   2      
+  20   2        }
+  21   1      }
+  22          
+  23          
+  24          void p_sysclk_init(void)
+  25          {
+  26   1        /*选择内部24MHz高精度IRC*/
+  27   1        P_SW2 = 0x80;
+  28   1        CKSEL = 0x00;                               //选择内部IRC ( 默认 )
+  29   1        CLKDIV = 0x02;                // 2分频 24MHz/2 = 12Mhz
+  30   1        P_SW2 = 0x00;
+  31   1      }
+  32          
+  33          
+  34          /**
+  35            * ***********************************************************************
+  36            * @brief  定时器初始化
+  37            *
+  38            * @param  :
+  39            *
+  40            * @retval void:
+  41            *
+  42            * @attention  : none
+  43            * ***********************************************************************
+  44            */
+  45          void p_timer_init(void)
+  46          {
+  47   1        disableInterrupts();
+  48   1      
+  49   1        /* Timer0 初始化 时间戳10ms */
+  50   1        AUXR &= 0x7F;   // 定时器时钟12T模式
+  51   1        TMOD &= 0xF0;   // 设置定时器模式
+  52   1        TL0 = 0xF0;     // 设置定时初值
+  53   1        TH0 = 0xD8;     // 设置定时初值
+  54   1        TF0 = 0;      // 清除TF0标志
+C51 COMPILER V9.54   TIMER                                                                 09/26/2019 21:32:20 PAGE 2   
+
+  55   1        TR0 = 1;      // 定时器0开始计时
+  56   1      
+  57   1        /* 使能定时器中断 */
+  58   1        ET0 = 1;                     // 使能定时器0中断
+  59   1        enableInterrupts();
+  60   1      }
+  61          
+  62          #if 0
+              void p_timer_uninit(void)
+              {
+                /* Timer0 初始化 时间戳1ms */
+                TR0 = 0;                   // 定时器0开始计时
+              
+                /* 使能定时器中断 */
+                ET0 = 0;                     // 使能定时器0中断
+              }
+              #endif
+  72          
+  73          /* 定时器0 时间戳 */
+  74          void TM0_Isr() interrupt 1 using 3
+  75          {
+  76   1        /* 10ms */
+  77   1        ++g_time_ms;
+  78   1        ++s_evnt_cnt;
+  79   1        s_evnt_cnt %= 100;
+  80   1      
+  81   1        /* 定时心跳包 */
+  82   1        ++g_heart_beat;
+  83   1        if (g_heart_beat == heart_time)
+  84   1        {
+  85   2          g_heart_sign = heart_send;
+  86   2          g_heart_beat = 0;
+  87   2        }
+  88   1          
+  89   1      
+  90   1        /* 喂狗 */
+  91   1        //WDG_RELOAD();
+  92   1      
+  93   1        /* 串口超时监测 */
+  94   1        if (COM2.RX_TimeOut > TimeOutSet2)
+  95   1        {
+  96   2          --COM2.RX_TimeOut;
+  97   2        }
+  98   1      
+  99   1        if (COM1.RX_TimeOut > TimeOutSet2)
+ 100   1        {
+ 101   2          --COM1.RX_TimeOut;
+ 102   2      
+ 103   2          /* 为了防止黏包，在WiFi在发送数据的时候不进行数据上报 */
+ 104   2          s_evnt_cnt = 0;
+ 105   2        }
+ 106   1      
+ 107   1        
+ 108   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    176    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      7       4
+C51 COMPILER V9.54   TIMER                                                                 09/26/2019 21:32:20 PAGE 3   
+
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
