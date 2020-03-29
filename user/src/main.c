@@ -77,7 +77,7 @@ void main(void)
 		default:
 			break;
 		}
-
+#if 0
 		/* 串口1接收处理与Air相连接 */
 		if (COM1.RX_TimeOut
 			&& COM1.RX_TimeOut <= TimeOutSet2)
@@ -102,6 +102,7 @@ void main(void)
 			COM2.RX_Cnt = 0;
 			p_uart2_send_string("OK2");
 		}
+#endif
 #if 0
 		/* 定时发送数据包到GSM */
 		if (g_heart_sign == heart_send)
